@@ -1,29 +1,29 @@
 /**
  * @intent
- * 注入时机判定：只在“新会话”的首个步骤（step === 1）且该会话尚未注入过时触发一次性注入；
- * 会话内后续步骤、压缩/恢复后均不再重复（用户明确只首步一次）。
+ * 注入时机判定：每个会话只在全局开头「决定一次」。第一次进入时 isDue 返回 true，调用方随即
+ * markDecided 置为已决定；之后无论后续步骤、新 turn、压缩/恢复，还是中途才出现的 yml，都一律
+ * 不再触发。语义等同 AGENTS.md：全局开头注入过就注入；当时没有 yml 就永久跳过，不补注。
  *
- * 边界：step !== 1 或会话已注入过则 isDue 返回 false；用 WeakSet 按会话跟踪已注入；只有真正注入
- * 成功后才 markInjected（重负拒绝首步时保留那唯一一次机会，不误标）。
+ * 边界：isDue 只对「尚未决定」的会话返回 true，与 step 无关；markDecided 在首次判定时即调用
+ * （与是否真的注入到内容无关，so 中途出现的文件不会被补注）；WeakSet 按会话隔离。
  *
  * 验收条件：
- * - 首步且未注入 -> isDue === true
- * - markInjected 后同一会话再查 -> false
- * - 另一会话首步 -> true（会话间隔离）
+ * - 未决定的会话 -> isDue === true
+ * - markDecided 后同一会话再查 -> false
+ * - 另一会话 -> true（会话间隔离）
  */
 /**
- * 创建注入判定器（会话间互不影响的 WeakSet 跟踪）。
- * @returns {{ isDue(session, step): boolean, markInjected(session): void }}
+ * 创建注入判定器（会话间互不影响的 WeakSet 跟踪，每个会话只“决定一次”）。
+ * @returns {{ isDue(session): boolean, markDecided(session): void }}
  */
 export function createInjectionDecider() {
-  const injected = new WeakSet();
+  const decided = new WeakSet();
   return {
-    isDue(session, step) {
-      if (step !== 1) return false;
-      return !injected.has(session);
+    isDue(session) {
+      return !decided.has(session);
     },
-    markInjected(session) {
-      injected.add(session);
+    markDecided(session) {
+      decided.add(session);
     }
   };
 }

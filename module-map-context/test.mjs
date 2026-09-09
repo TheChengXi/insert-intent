@@ -125,13 +125,34 @@ console.log('== missing _packages: graceful no-op ==');
   check('decision unchanged when _packages absent', res.messages.length === 1 && res.messages[0] === userMsg);
 }
 
-console.log('== rejected decision: no injection, not marked ==');
+console.log('== rejected decision: no injection, not decided ==');
 {
   const { ctx, handler } = makeCtx(makeFs(filesA));
   apply(ctx, {});
   const session = { header: { cwd: A } };
   const res = await handler()({ agent: { session }, step: 1, signal: sig() }, async () => ({ kind: 'reject' }));
   check('reject passes through', res.kind === 'reject');
+}
+
+console.log('== yml appears mid-session: never injects (AGENTS.md semantics) ==');
+{
+  const C = 'D:/testws/C';
+  const filesC = new Map();
+  dir(filesC, C);
+  const fs = makeFs(filesC); // reads live from filesC, so later additions become visible
+  const { ctx, handler } = makeCtx(fs);
+  apply(ctx, {});
+  const session = { header: { cwd: C } };
+  // session start: no yml -> decide + skip
+  const r1 = await handler()({ agent: { session }, step: 1, signal: sig() }, next);
+  check('no yml at start -> no inject', r1.messages.length === 1 && r1.messages[0] === userMsg);
+  // yml appears later (e.g. after a report)
+  dir(filesC, path.join(C, '.intentflow'));
+  dir(filesC, path.join(C, '.intentflow', '_packages'));
+  file(filesC, path.join(C, '.intentflow', '_packages', 'x.yml'), 'packageName: x\n');
+  // a later turn's first step must NOT inject
+  const r2 = await handler()({ agent: { session }, step: 1, signal: sig() }, next);
+  check('later step after yml appears -> still no inject', r2.messages.length === 1 && r2.messages[0] === userMsg);
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`);
