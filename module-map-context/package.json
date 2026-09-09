@@ -1,0 +1,31 @@
+{
+  "name": "module-map-context",
+  "version": "0.1.0",
+  "description": "DSH host plugin: inject the workspace module map (.intentflow/_packages/*.yml verbatim) at the top of each new session's first step, skipping gracefully when the folder is absent.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "context",
+    "module-map",
+    "intentflow"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/cordis": "*"
+  },
+  "license": "MIT"
+}

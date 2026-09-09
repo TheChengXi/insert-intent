@@ -1,0 +1,30 @@
+packageName: module-map-context
+summary: |
+  DSH 宿主插件：在每个新工作会话首个步骤，经 ctx.fs 读取项目根 .intentflow/_packages 顶层
+  *.yml 的原文，按文件名排序拼接后作为 sourced 用户消息快照追加到该步骤批次末尾（位于直接
+  用户消息、AGENTS.md 基线与运行时上下文之后）。目录缺失/无 fs provider/非首步时直接放行。
+  入口 index.js（导出 name/inject/Config/apply），依赖 @deepseek-ai/dsh-llm
+  （createUserMessage）、@deepseek-ai/schemastery 与 ctx.fs。
+
+groups:
+  - name: 插件入口与装配
+    summary: 插件对象契约（name/inject/Config/apply）、agent/pre-step 监听注册与快照折入编排。
+    files:
+      - module-map-context/index.js
+      - module-map-context/package.json
+  - name: 发现读取
+    summary: marker（.git）向上定位项目根，枚举 _packages 顶层 *.yml 并经 ctx.fs readText 读取，异常降级为空。
+    files:
+      - module-map-context/lib/discover.js
+  - name: 渲染拼接
+    summary: 将各模块 yml 原文按传入顺序逐字拼接为注入文本，不解析不加引导头。
+    files:
+      - module-map-context/lib/render.js
+  - name: 注入判定
+    summary: WeakSet 按会话跟踪，保证仅新会话首个步骤注入一次、会话内/压缩后不重复。
+    files:
+      - module-map-context/lib/inject-decision.js
+  - name: 集成验证
+    summary: 驱动真实已装插件的运行时测试：首步注入/位置/排序拼接/去重/缺失跳过/决策拒绝。
+    files:
+      - module-map-context/test.mjs
