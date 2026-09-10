@@ -155,5 +155,65 @@ console.log('== yml appears mid-session: never injects (AGENTS.md semantics) =='
   check('later step after yml appears -> still no inject', r2.messages.length === 1 && r2.messages[0] === userMsg);
 }
 
+// --- minimal sessionProjections registry driven over a durable event list ---
+function makeProjections() {
+  const defs = new Map();
+  const states = new Map();
+  const events = [];
+  return {
+    register(def) {
+      defs.set(def.key, def);
+      if (!states.has(def.key)) states.set(def.key, def.init()); // same key+version re-register shares the cell, keep state
+    },
+    feed(event) { events.push(event); for (const [k, d] of defs) states.set(k, d.apply(states.get(k), event)); },
+    stateOf(_session, key) { return states.get(key); }
+  };
+}
+function makeCtxWithProjections(fs, projections) {
+  const handlers = [];
+  const ctx = {
+    get(k) { return k === 'fs' ? fs : k === 'sessionProjections' ? projections : undefined; },
+    on(evt, handler, opts) { if (evt === 'agent/pre-step') handlers.push({ handler, opts }); }
+  };
+  return { ctx, handler: () => handlers[0].handler };
+}
+
+console.log('== durable dedup across host restart (session projection) ==');
+{
+  const durable = makeProjections(); // the durable store that survives restart
+  const { ctx, handler } = makeCtxWithProjections(makeFs(filesA), durable);
+  apply(ctx, {});
+  const session = { header: { cwd: A } };
+  const r1 = await handler()({ agent: { session }, step: 1, signal: sig() }, next);
+  check('first process injects snapshot', r1.messages.length === 2 && r1.messages[1].source?.form === 'snapshot');
+  // the injected snapshot is committed as a durable user/message event -> projection folds it
+  durable.feed({ type: 'user/message', data: { source: { kind: 'plugin', plugin: 'module-map-context', form: 'snapshot' }, content: [{ type: 'text', text: A_TEXT }] } });
+  check('projection marked injected after commit', durable.stateOf(session, 'moduleMapContext') === true);
+  // restart: fresh process, same durable store -> must NOT re-inject
+  const { ctx: ctx2, handler: handler2 } = makeCtxWithProjections(makeFs(filesA), durable);
+  apply(ctx2, {});
+  const r2 = await handler2()({ agent: { session }, step: 1, signal: sig() }, next);
+  check('restarted process does NOT re-inject (durable)', r2.messages.length === 1 && r2.messages[0] === userMsg);
+}
+
+console.log('== skip not persisted across restart (official degrade) ==');
+{
+  const durableB = makeProjections();
+  {
+    const p1 = makeCtxWithProjections(makeFs(filesB), durableB);
+    apply(p1.ctx, {});
+    const r = await p1.handler()({ agent: { session: { header: { cwd: B } } }, step: 1, signal: sig() }, next);
+    check('skip: no _packages does not inject', r.messages.length === 1 && r.messages[0] === userMsg);
+  }
+  check('skip: projection not marked (not durable)', durableB.stateOf({}, 'moduleMapContext') !== true);
+  {
+    // restart: same durable store, now workspace with _packages present -> re-probes and injects (official degrade)
+    const p2 = makeCtxWithProjections(makeFs(filesA), durableB);
+    apply(p2.ctx, {});
+    const r = await p2.handler()({ agent: { session: { header: { cwd: A } } }, step: 1, signal: sig() }, next);
+    check('restart with _packages present -> injects once (degrade)', r.messages.length === 2 && r.messages[1].source?.form === 'snapshot');
+  }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

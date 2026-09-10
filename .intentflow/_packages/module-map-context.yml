@@ -8,7 +8,7 @@ summary: |
 
 groups:
   - name: 插件入口与装配
-    summary: 插件对象契约（name/inject/Config/apply）、agent/pre-step 监听注册与快照折入编排。
+    summary: 插件对象契约（name/inject/Config/apply）、agent/pre-step 监听注册、会话投影注册与快照折入编排。
     files:
       - module-map-context/index.js
       - module-map-context/package.json
@@ -21,7 +21,7 @@ groups:
     files:
       - module-map-context/lib/render.js
   - name: 注入判定
-    summary: WeakSet 按会话跟踪，保证仅新会话首个步骤注入一次、会话内/压缩后不重复。
+    summary: 会话投影（ctx.sessionProjections 折叠已提交事件）持久识别"已注入"，跨宿主重启/恢复/压缩不重复；另保留进程内 WeakSet 兜底；跳过判定跨重启降级重探。
     files:
       - module-map-context/lib/inject-decision.js
   - name: 集成验证
