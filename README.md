@@ -13,6 +13,8 @@ At the first step of each new session, `module-map-context`:
 
 It behaves like `AGENTS.md`: the decision is made **once per session**. If the folder has no YAML when the session starts, nothing is injected — and a module map created *later* (e.g. by a `report`) is **not** back-filled into an already-running session.
 
+**Restart-safe.** "Once per session" is enforced durably through a **session projection** (`ctx.sessionProjections`): the projection folds over the session's committed events and flags the module map once it has been injected, so an already-injected snapshot is **not** re-injected after a host restart, session resume, or context compaction. A process-local `WeakSet` backs it up for compositions without the projection registry / the pre-commit gap. Skipping (no `_packages` at session start) is remembered within a process but re-checked after a restart — matching official DSH plugin behavior.
+
 ## Install
 
 Copy the package into a DSH profile's `node_modules` (example: the `web` profile), then add an insert entry to that profile's `cordis.patch.yml`.
@@ -62,11 +64,11 @@ groups:
 
 ## File layout
 
-- `index.js` — plugin entry (`{ name, inject, Config, apply }`), `agent/pre-step` listener and snapshot append
+- `index.js` — plugin entry (`{ name, inject, Config, apply }`), `agent/pre-step` listener, session-projection registration and snapshot append
 - `lib/discover.js` — project-root discovery (`.git` marker walk) + `ctx.fs` reads
 - `lib/render.js` — filename-sorted verbatim concatenation (pure)
-- `lib/inject-decision.js` — once-per-session decision
-- `test.mjs` — runtime verification against the installed plugin
+- `lib/inject-decision.js` — durable once-per-session decision: session projection (`createModuleMapProjection`) + in-process `WeakSet` decider
+- `test.mjs` — runtime verification against the installed plugin (including restart-safe dedup)
 
 ## License
 
